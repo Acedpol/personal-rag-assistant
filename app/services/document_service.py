@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.document import Document
+from app.rag.chunking import split_text
 from app.rag.text_extraction import SUPPORTED_CONTENT_TYPES, extract_text
+from app.rag.vector_store import delete_document_chunks, index_document_chunks
 
 
 def _save_uploaded_file(filename: str, content: bytes) -> str:
@@ -28,17 +30,21 @@ def ingest_document(db: Session, filename: str, content_type: str, content: byte
         raise ValueError("No text could be extracted from this file")
 
     _save_uploaded_file(filename, content)
+    chunks = split_text(text)
 
     document = Document(
         filename=filename,
         content_type=content_type,
         extracted_text=text,
         char_count=len(text),
-        chunk_count=0,
+        chunk_count=len(chunks),
     )
     db.add(document)
     db.commit()
     db.refresh(document)
+
+    index_document_chunks(document.id, chunks)
+
     return document
 
 
@@ -55,5 +61,6 @@ def get_document_or_404(db: Session, document_id: int) -> Document:
 
 def delete_document(db: Session, document_id: int) -> None:
     document = get_document_or_404(db, document_id)
+    delete_document_chunks(document_id)
     db.delete(document)
     db.commit()
