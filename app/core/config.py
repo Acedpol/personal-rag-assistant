@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    database_url: str = "sqlite:///./data/rag.db"
     upload_dir: str = "./data/documents"
     chroma_persist_dir: str = "./data/chroma"
     embedding_model_name: str = "all-MiniLM-L6-v2"

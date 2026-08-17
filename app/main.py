@@ -6,10 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from app.api.routes import documents
 from app.core.config import settings
+from app.db.base import Base
+from app.db.session import engine
 
 os.makedirs(settings.upload_dir, exist_ok=True)
 os.makedirs(settings.chroma_persist_dir, exist_ok=True)
+
+# No Alembic here (deliberate, unlike expense-api): a single small metadata
+# table for a portfolio-scale personal tool doesn't earn the migration
+# machinery — the point of this project is the RAG pipeline, not repeating
+# migration setup already proven in expense-api.
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Personal RAG Assistant", version="0.1.0")
 
@@ -20,6 +29,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(documents.router)
 
 
 @app.get("/health", tags=["health"])
