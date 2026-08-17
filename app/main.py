@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.api.routes import documents
+from app.api.routes import documents, search
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import engine
@@ -31,6 +31,7 @@ app.add_middleware(
 )
 
 app.include_router(documents.router)
+app.include_router(search.router)
 
 
 @app.get("/health", tags=["health"])
