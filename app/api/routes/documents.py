@@ -3,7 +3,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.document import Document
-from app.schemas.document import DocumentDetail, DocumentRead
+from app.rag.chunking import split_text
+from app.schemas.document import ChunkPreview, DocumentDetail, DocumentRead
 from app.services import document_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -35,3 +36,12 @@ def get_document(document_id: int, db: Session = Depends(get_db)) -> Document:
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(document_id: int, db: Session = Depends(get_db)) -> None:
     document_service.delete_document(db, document_id)
+
+
+@router.get("/{document_id}/chunks", response_model=list[ChunkPreview])
+def preview_document_chunks(document_id: int, db: Session = Depends(get_db)) -> list[ChunkPreview]:
+    document = document_service.get_document_or_404(db, document_id)
+    chunks = split_text(document.extracted_text)
+    return [
+        ChunkPreview(index=i, text=chunk, char_count=len(chunk)) for i, chunk in enumerate(chunks)
+    ]

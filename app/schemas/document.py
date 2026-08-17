@@ -16,3 +16,9 @@ class DocumentRead(BaseModel):
 
 class DocumentDetail(DocumentRead):
     extracted_text: str
+
+
+class ChunkPreview(BaseModel):
+    index: int
+    text: str
+    char_count: int
