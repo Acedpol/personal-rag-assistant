@@ -38,3 +38,12 @@ def test_ask_with_no_relevant_documents_returns_empty_sources(client, monkeypatc
     body = response.json()
     assert body["sources"] == []
     assert "No se encontro ningun fragmento" in body["answer"]
+
+
+def test_ask_with_explicit_unconfigured_provider_returns_400(client, monkeypatch):
+    monkeypatch.setattr(settings, "google_api_key", None)
+    monkeypatch.setattr(settings, "anthropic_api_key", None)
+
+    response = client.post("/ask", json={"question": "algo", "provider": "google"})
+
+    assert response.status_code == 400
