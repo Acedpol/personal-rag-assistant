@@ -8,10 +8,11 @@ Proyecto de portfolio con foco en **IA aplicada**: no repite auth/CRUD ya demost
 
 ```
 Subir documento → extraer texto (pypdf) → trocear (langchain-text-splitters)
-      → generar embeddings (sentence-transformers, local) → indexar en ChromaDB
+      → generar embeddings (Google si hay API key, si no local) → indexar en ChromaDB
 
-Pregunta → embeber pregunta → buscar semánticamente en ChromaDB
-      → recuperar chunks relevantes → generar respuesta (Claude, o mock si no hay API key)
+Pregunta → embeber pregunta (mismo proveedor que la indexación) → buscar semánticamente
+      → recuperar chunks relevantes → generar respuesta (Google Gemini por defecto,
+        Claude si se selecciona explícitamente, o mock si no hay ninguna API key)
 ```
 
 ## Stack
@@ -19,9 +20,10 @@ Pregunta → embeber pregunta → buscar semánticamente en ChromaDB
 - FastAPI + SQLAlchemy (solo metadata de documentos; sin Alembic, deliberado — ver hitos)
 - `pypdf` — extracción de texto de PDFs
 - `langchain-text-splitters` — chunking real (respeta párrafos/frases, no corta a lo bruto)
-- `sentence-transformers` (`all-MiniLM-L6-v2`) — embeddings **locales**, sin coste ni API key
-- `chromadb` — vector store embebido
-- `anthropic` — generación de respuestas con Claude (opcional, ver abajo)
+- `sentence-transformers` (`all-MiniLM-L6-v2`) — embeddings **locales**, sin coste ni API key, fallback sin configuración
+- `google-genai` — generación con Gemini (proveedor por defecto) y embeddings de Google, ambos tras la misma `GOOGLE_API_KEY`
+- `chromadb` — vector store embebido, una colección por proveedor+dimensión de embedding
+- `anthropic` — generación de respuestas con Claude, alternativa explícita a Gemini (ver abajo)
 - pytest, ruff, GitHub Actions
 
 ## Sin autenticación (deliberado)
@@ -40,11 +42,23 @@ uvicorn app.main:app --reload --port 8010
 
 Docs interactivas en `http://localhost:8010/docs`.
 
-## Generación de respuestas: mock vs. Claude real
+## Generación de respuestas: Google Gemini, Claude o simulado
 
-Sin `ANTHROPIC_API_KEY` configurada, `/ask` usa un **generador simulado honesto**: no inventa una respuesta, muestra literalmente qué fragmentos recuperó y por qué, dejando claro que es una simulación. Todo el resto del pipeline (ingesta, chunking, embeddings, retrieval) es 100% real y gratuito.
+Tres niveles, en este orden de preferencia:
 
-En cuanto añadas tu `ANTHROPIC_API_KEY` a `.env`, `/ask` empieza a responder con Claude de verdad, sin tocar código — la selección de proveedor es automática.
+1. **Google Gemini** (`GOOGLE_API_KEY` configurada) — proveedor **por defecto**, gratuito en el nivel de AI Studio.
+2. **Claude** (`ANTHROPIC_API_KEY` configurada) — se usa si se selecciona explícitamente, o si no hay key de Google.
+3. **Generador simulado honesto** — si no hay ninguna key: no inventa una respuesta, muestra el fragmento más relevante completo (nunca cortado a mitad de frase) y deja claro que es una simulación.
+
+Todo el resto del pipeline (ingesta, chunking, embeddings, retrieval) es 100% real y gratuito sin ninguna key.
+
+`POST /ask` acepta un campo opcional `provider: "google" | "anthropic"` para forzar uno de los dos explícitamente en esa pregunta concreta; si se pide uno sin su key configurada, devuelve `400` en vez de caer en silencio a mock. `GET /providers` expone el proveedor por defecto, los disponibles, y el proveedor de embeddings activo — así un cliente (como el frontend) sabe de antemano qué opciones ofrecer.
+
+## Embeddings: locales o Google
+
+Igual criterio que la generación: si hay `GOOGLE_API_KEY`, la ingesta y la búsqueda usan el modelo de embeddings de Google; si no, `sentence-transformers` local. La key de Anthropic nunca activa embeddings de Google — Anthropic no tiene una API de embeddings propia.
+
+ChromaDB no permite mezclar embeddings de distinta dimensión en una misma colección, así que cada proveedor+dimensión tiene su propia colección (`document_chunks_local_384d`, `document_chunks_google_768d`). Cambiar de proveedor de embeddings (p. ej. añadir la key de Google después de haber indexado documentos localmente) deja esos documentos inconsultables hasta resubirlos — limitación aceptada y documentada, sin migración/reindexado automático.
 
 ## Tests
 
@@ -52,7 +66,7 @@ En cuanto añadas tu `ANTHROPIC_API_KEY` a `.env`, `/ask` empieza a responder co
 pytest -v
 ```
 
-18 tests contra el pipeline real (embeddings y ChromaDB reales, no mockeados) — mockear la propia mecánica de RAG habría dejado los tests con menos valor que la verificación manual. El único mock es el proveedor de LLM cuando no hay API key, que es exactamente lo que se está probando ahí.
+37 tests contra el pipeline real (embeddings y ChromaDB reales, no mockeados) — mockear la propia mecánica de RAG habría dejado los tests con menos valor que la verificación manual. Los proveedores de LLM/embeddings de pago (Google, Anthropic) se prueban solo a nivel de selección/nombrado con keys falsas, sin llamada de red real — igual criterio para ambos, ninguno se ejercita de verdad en CI.
 
 ## Estructura
 
@@ -63,23 +77,24 @@ app/
 ├── db/                    # base declarativa y sesión (SQLite, solo metadata)
 ├── models/                 # Document (SQLAlchemy)
 ├── schemas/                 # Pydantic schemas
-├── api/routes/                # documents, search, ask
+├── api/routes/                # documents, search, ask, providers
 ├── services/                   # document_service (orquesta ingesta)
 └── rag/                          # el corazón del proyecto
     ├── text_extraction.py         # pypdf
     ├── chunking.py                  # langchain-text-splitters
-    ├── vector_store.py                # embeddings + ChromaDB
-    └── llm_provider.py                  # Mock / Anthropic, selección automática
+    ├── vector_store.py                # embeddings (local o Google) + ChromaDB, colección por proveedor
+    └── llm_provider.py                  # Mock / Google / Anthropic, selección con override explícito
 ```
 
 ## Estado del proyecto / hitos
 
 - [x] Ingesta de documentos (PDF/texto) con extracción real
 - [x] Chunking real (no corte fijo ingenuo)
-- [x] Embeddings locales + indexado en ChromaDB (métrica coseno)
+- [x] Embeddings locales o Google (según API key) + indexado en ChromaDB (métrica coseno, colección por proveedor)
 - [x] Retrieval semántico con score de similitud
-- [x] Generación con Claude (real) / mock honesto (sin API key)
-- [x] Tests (18, pipeline real) + CI
+- [x] Generación con Gemini (por defecto) / Claude (alternativa explícita) / mock honesto (sin ninguna key)
+- [x] Selección de proveedor por request (`POST /ask`) + endpoint de disponibilidad (`GET /providers`)
+- [x] Tests (37, pipeline real) + CI
 
 Pendiente:
 - [ ] Deploy real — aplazado, necesita cuenta propia
