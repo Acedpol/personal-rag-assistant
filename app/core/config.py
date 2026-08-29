@@ -18,6 +18,13 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = None
     anthropic_model: str = "claude-sonnet-4-5"
 
+    # Shared between embeddings and (later) generation -- Anthropic has no
+    # first-party embeddings API, so this key only ever affects embeddings
+    # via Google, never Anthropic.
+    google_api_key: Optional[str] = None
+    google_embedding_model: str = "gemini-embedding-001"
+    google_embedding_dimensions: int = 768
+
     # Plain str, not List[str]: newer pydantic-settings (2.11+) tries to
     # JSON-decode env values for list-typed fields *before* any
     # mode="before" validator runs, and raises instead of falling back to
