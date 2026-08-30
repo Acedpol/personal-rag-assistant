@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     # first-party embeddings API, so this key only ever affects embeddings
     # via Google, never Anthropic.
     google_api_key: Optional[str] = None
-    google_generation_model: str = "gemini-2.5-flash"
+    google_generation_model: str = "gemini-3.6-flash"
     google_embedding_model: str = "gemini-embedding-001"
     google_embedding_dimensions: int = 768
 

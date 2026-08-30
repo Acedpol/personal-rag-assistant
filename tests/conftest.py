@@ -39,6 +39,16 @@ def isolated_vector_store(tmp_path, monkeypatch):
     # test-isolation reason to clear it).
     monkeypatch.setattr(settings, "chroma_persist_dir", str(tmp_path / "chroma"))
     monkeypatch.setattr(settings, "upload_dir", str(tmp_path / "documents"))
+    # Default every client-based test to the local embedding provider,
+    # regardless of what a developer's real .env contains -- without this,
+    # the first person to configure a real GOOGLE_API_KEY locally has every
+    # /documents upload and /ask call in the suite silently start hitting
+    # the real Google API (slow, costs quota, and non-deterministic).
+    # Found exactly that way: test_ask.py's mock-path tests only neutralized
+    # anthropic_api_key, and started making real Gemini calls the moment a
+    # real Google key existed. Tests that want the Google path explicitly
+    # override this back in their own body (see test_providers.py).
+    monkeypatch.setattr(settings, "google_api_key", None)
     vector_store.get_chroma_client.cache_clear()
     yield
     vector_store.get_chroma_client.cache_clear()
