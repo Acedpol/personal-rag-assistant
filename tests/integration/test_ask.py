@@ -4,8 +4,13 @@ from app.core.config import settings
 def test_ask_uses_mock_provider_without_api_key(client, monkeypatch):
     # Explicit, not just relying on the test env having no key set — this
     # test's whole point is asserting the mock path, regardless of what a
-    # developer's local .env happens to contain.
+    # developer's local .env happens to contain. Both keys: google_api_key
+    # affects embeddings too (the /documents upload below), and forgetting
+    # it here made this test hit the real Gemini API the first time a real
+    # GOOGLE_API_KEY existed in .env -- found by actually running the suite
+    # with a real key configured, not assumed.
     monkeypatch.setattr(settings, "anthropic_api_key", None)
+    monkeypatch.setattr(settings, "google_api_key", None)
 
     client.post(
         "/documents",
@@ -31,6 +36,7 @@ def test_ask_uses_mock_provider_without_api_key(client, monkeypatch):
 
 def test_ask_with_no_relevant_documents_returns_empty_sources(client, monkeypatch):
     monkeypatch.setattr(settings, "anthropic_api_key", None)
+    monkeypatch.setattr(settings, "google_api_key", None)
 
     response = client.post("/ask", json={"question": "algo"})
 
