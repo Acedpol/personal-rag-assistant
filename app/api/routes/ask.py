@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
 from app.rag.llm_provider import get_llm_provider
@@ -25,7 +25,11 @@ def ask(request: AskRequest) -> AskResponse:
         for match in matches
     ]
 
-    provider = get_llm_provider()
+    try:
+        provider = get_llm_provider(request.provider)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
     answer = provider.generate_answer(request.question, [source.text for source in sources])
 
     return AskResponse(answer=answer, sources=sources, provider=provider.__class__.__name__)
