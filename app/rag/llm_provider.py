@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from app.core.config import settings
 
@@ -97,7 +98,53 @@ class AnthropicLLMProvider(LLMProvider):
         return response.content[0].text
 
 
-def get_llm_provider() -> LLMProvider:
+class GoogleLLMProvider(LLMProvider):
+    def __init__(self, api_key: str, model: str):
+        from google import genai
+
+        self._client = genai.Client(api_key=api_key)
+        self._model = model
+
+    def generate_answer(self, question: str, context_chunks: list[str]) -> str:
+        if not context_chunks:
+            return "No se encontro ningun fragmento relevante para responder a esa pregunta."
+
+        context = "\n\n---\n\n".join(context_chunks)
+        prompt = f"{RAG_SYSTEM_PROMPT}\n\nContexto:\n{context}\n\nPregunta: {question}"
+
+        response = self._client.models.generate_content(model=self._model, contents=prompt)
+        return response.text
+
+
+def available_providers() -> list[str]:
+    available = []
+    if settings.google_api_key:
+        available.append("google")
     if settings.anthropic_api_key:
+        available.append("anthropic")
+    return available
+
+
+def default_provider() -> str:
+    available = available_providers()
+    if "google" in available:
+        return "google"
+    if "anthropic" in available:
+        return "anthropic"
+    return "mock"
+
+
+def get_llm_provider(preferred: Optional[str] = None) -> LLMProvider:
+    choice = preferred or default_provider()
+
+    if choice == "google":
+        if not settings.google_api_key:
+            raise ValueError("google provider requested but GOOGLE_API_KEY is not configured")
+        return GoogleLLMProvider(settings.google_api_key, settings.google_generation_model)
+
+    if choice == "anthropic":
+        if not settings.anthropic_api_key:
+            raise ValueError("anthropic provider requested but ANTHROPIC_API_KEY is not configured")
         return AnthropicLLMProvider(settings.anthropic_api_key, settings.anthropic_model)
+
     return MockLLMProvider()
