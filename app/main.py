@@ -20,7 +20,7 @@ os.makedirs(settings.chroma_persist_dir, exist_ok=True)
 # migration setup already proven in expense-api.
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Personal RAG Assistant", version="1.0.0")
+app = FastAPI(title="Personal RAG Assistant", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
