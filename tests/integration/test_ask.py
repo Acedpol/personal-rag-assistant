@@ -25,6 +25,8 @@ def test_ask_uses_mock_provider_without_api_key(client, monkeypatch):
     assert body["provider"] == "MockLLMProvider"
     assert len(body["sources"]) > 0
     assert "Respuesta simulada" in body["answer"]
+    # The source sentence must appear complete, not cut mid-phrase.
+    assert "Los empleados tienen 23 dias de vacaciones al ano." in body["answer"]
 
 
 def test_ask_with_no_relevant_documents_returns_empty_sources(client, monkeypatch):
